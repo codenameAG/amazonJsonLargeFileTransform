@@ -74,7 +74,7 @@ namespace ca.awsLargeJsonTransform.Services
                 var length = 0L;
                 var totalRead = 0L;
                 var count = bufferSize;
-                int totalRecordCount = 0;
+                int bufferRowCount = 0;
                 int maxJsonRowCountPerFile = ConfigProvider.Instance.GetMaxRowCountPerCsvFile();
                 int nextFileNumber = 1;
 
@@ -103,9 +103,8 @@ namespace ca.awsLargeJsonTransform.Services
                         {
                             try
                             {
-                                ///debug at totalRecordCount = 19725
-                                totalRecordCount++;
-                                LogProvider.Trace(logTag, $"body parsing at totalRecordCount = {totalRecordCount}");
+                                bufferRowCount++;
+                                LogProvider.TraceDetailMode(logTag, $"body parsing at bufferRowCount = {bufferRowCount}");
                                 jsonDocument = ParseBody(jsonDocument + line, searchTerms);
                                 nextFileNumber = ExportToCsv(searchTerms, maxJsonRowCountPerFile, nextFileNumber);
                             }
@@ -115,6 +114,13 @@ namespace ca.awsLargeJsonTransform.Services
                             }
                         }
                     }
+                }
+                nextFileNumber = ExportToCsv(searchTerms, nextFileNumber);
+                if (!string.IsNullOrWhiteSpace(jsonDocument))
+                {
+                    string outputFilePath = ConfigProvider.Instance.GetDestinationCsvFilePath(nextFileNumber++) + ".leftover.txt";
+                    LogProvider.Information(logTag, $"Writing to csv file '{new FileInfo(outputFilePath).Name}' with total record count {searchTerms.dataByDepartmentAndSearchTerm.Count}");
+                    File.WriteAllText(outputFilePath, jsonDocument);
                 }
             }
             catch (Exception ex)
@@ -157,7 +163,6 @@ namespace ca.awsLargeJsonTransform.Services
             {
                 if (string.IsNullOrWhiteSpace(jsonBody) || !jsonBody.Contains("}")) { return jsonBody; }
                 if (searchTerms.dataByDepartmentAndSearchTerm == null) { searchTerms.dataByDepartmentAndSearchTerm = new List<Databydepartmentandsearchterm>(); }
-
                 int lastIndexOfRow = jsonBody.LastIndexOf("}") + 1;
                 string arrayBody = jsonBody.Substring(0, lastIndexOfRow).Trim() + "]";
                 searchTerms.dataByDepartmentAndSearchTerm.AddRange(arrayBody.FromJson<List<Databydepartmentandsearchterm>>());
@@ -170,22 +175,28 @@ namespace ca.awsLargeJsonTransform.Services
                 {
                     leftoverBody = "[" + leftoverBody;
                 }
-
+                LogProvider.Trace(logTag, $"dataByDepartmentAndSearchTerm added current file row counter {searchTerms.dataByDepartmentAndSearchTerm.Count}");
                 return leftoverBody;
             }
             catch (Exception ex)
             {
-                LogProvider.Error($"{logTag} jsonBody={jsonBody}", ex);
+                LogProvider.Error($"{logTag} this error can be ignored as it will get fix in next iteration", ex);
                 return jsonBody;
             }
         }
 
         private int ExportToCsv(SearchTerms searchTerms, int maxJsonRowCountPerFile, int nextFileNumber)
         {
+            if (searchTerms == null || searchTerms.dataByDepartmentAndSearchTerm?.Count == 0) { return nextFileNumber; }
+            if (searchTerms?.dataByDepartmentAndSearchTerm?.Count < maxJsonRowCountPerFile) { return nextFileNumber; }
+            return ExportToCsv(searchTerms, nextFileNumber);
+        }
+
+        private int ExportToCsv(SearchTerms searchTerms, int nextFileNumber)
+        {
             string logTag = $"{_logTag}.ExportToCsv";
             try
             {
-                if (searchTerms.dataByDepartmentAndSearchTerm.Count < maxJsonRowCountPerFile) { return nextFileNumber; }
                 StringBuilder sbCsvContent = new StringBuilder();
                 sbCsvContent.AppendLine(ConfigProvider.Instance.GetDataSearchTerCSVHeaderLine());
                 searchTerms.dataByDepartmentAndSearchTerm.ForEach(term =>
@@ -207,20 +218,30 @@ namespace ca.awsLargeJsonTransform.Services
                     }
                     catch (Exception ex)
                     {
-                        LogProvider.Error($"{logTag}.forEachTerm term={term.ToJson()}", ex);                        
+                        LogProvider.Error($"{logTag}.forEachTerm term={term.ToJson()}", ex);
                     }
                 });
                 string outputFilePath = ConfigProvider.Instance.GetDestinationCsvFilePath(nextFileNumber);
-                LogProvider.Trace(logTag, $"Writing to csv file '{new FileInfo(outputFilePath).FullName}'");
+                LogProvider.Information(logTag, $"Writing to csv file '{new FileInfo(outputFilePath).Name}' with total record count {searchTerms.dataByDepartmentAndSearchTerm.Count}");
                 File.WriteAllText(outputFilePath, sbCsvContent.ToString());
+                nextFileNumber++;
                 searchTerms.dataByDepartmentAndSearchTerm.Clear();
-                return nextFileNumber + 1;
+
             }
             catch (Exception ex)
             {
                 LogProvider.Error(logTag, ex);
-                return nextFileNumber;
             }
+            return nextFileNumber;
+        }
+        private string WriteToFile(int nextFileNumber, string content, string overrideExt = "")
+        {
+            if (string.IsNullOrWhiteSpace(content)) { return string.Empty; }
+            string logTag = $"{_logTag}.WriteToCsv";
+            string outputFilePath = ConfigProvider.Instance.GetDestinationCsvFilePath(nextFileNumber);
+            if (!string.IsNullOrWhiteSpace(overrideExt)) { outputFilePath += overrideExt; }
+            File.WriteAllText(outputFilePath, content);
+            return outputFilePath;
         }
     }
 }

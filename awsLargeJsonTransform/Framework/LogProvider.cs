@@ -62,12 +62,7 @@ namespace ca.awsLargeJsonTransform.Framework
         /// <param name="tag">tag of detail to log</param>
         /// <param name="message">message to log</param>
         /// <param name="writeToConsole">Flag indicates whether to write log on console screen or not</param>
-        public static void ErrorDetailMode(string prefixOrTag, Exception ex)
-        {
-            if (!ConfigProvider.Instance.GetDebugTraceDetailMode()) { return; }
-            Error(prefixOrTag, ex);
-        }
-
+        
         ///<summary>
         /// Write error logs to log file
         /// </summary>
@@ -76,7 +71,7 @@ namespace ca.awsLargeJsonTransform.Framework
         /// <param name="writeToConsole">Flag indicates whether to write log on console screen or not</param>
         public static void Error(string prefixOrTag, Exception ex)
         {
-            string error = ConfigProvider.Instance.GetDebugTraceDetailMode() ? ex.ToString() : $"Error: {ex.Message} {GetInnerErrorDetails(ex.InnerException)}".Trim();
+            string error = ConfigProvider.Instance.GetErrorDetailMode() ? ex.ToString() : $"Error: {ex.Message} {GetInnerErrorDetails(ex.InnerException)}".Trim();
             Write(LogLevel.Error, $"{prefixOrTag}.Error: {ex.Message}.", error, null);
         }
         public static void ErrorAndEmail(string prefixOrTag, Exception ex)

@@ -58,7 +58,7 @@ namespace ca.awsLargeJsonTransform.Framework
             string filePathBase = $@"{outputFolderPath}\search_terms_{DateTime.Now.ToString("yyyyMMddhhmmss")}";
             if (nextFileNumber.HasValue)
             {
-                return $@"{filePathBase}_{nextFileNumber.Value}.csv";
+                return $@"{filePathBase}_{nextFileNumber.Value.ToString("00000")}.csv";
             }
             else
             {
@@ -74,6 +74,10 @@ namespace ca.awsLargeJsonTransform.Framework
         public bool GetDebugTraceDetailMode()
         {
             return bool.Parse(GetLogSettings("debugTraceDetailMode", "false"));
+        }
+        public bool GetErrorDetailMode()
+        {
+            return bool.Parse(GetLogSettings("errorDetailMode", "true"));
         }
         public string GetConsoleLogType()
         {
