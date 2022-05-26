@@ -25,6 +25,7 @@ namespace ca.awsLargeJsonTransform.Services
     public class JsonLargeFileProcessService : IJsonLargeFileProcessService
     {
         private string _logTag = "JsonLFPService";
+        private long _totalRecordCount = 0;
         public JsonLargeFileProcessService()
         {
 
@@ -39,7 +40,7 @@ namespace ca.awsLargeJsonTransform.Services
         {
             var watch = new System.Diagnostics.Stopwatch();
             watch.Start();
-            LogProvider.Trace($"{_logTag}.Execute", $"Started");
+            LogProvider.Information($"{_logTag}.Execute", $"Started");
             try
             {
                 ParseLargeJsonFile(ConfigProvider.Instance.GetSourceJsonFilePath());
@@ -49,8 +50,8 @@ namespace ca.awsLargeJsonTransform.Services
                 LogProvider.Error($"{_logTag}.Execute FAILED", ex);
             }
             watch.Stop();
-            LogProvider.Trace($"{_logTag}.Execute", $"Completed");
-            LogProvider.Trace($"{_logTag}.Execute", $"Total Execution Time: {watch.Elapsed.ToString(@"hh\:mm\:ss")}");
+            LogProvider.Information($"{_logTag}.Execute", $"Completed with total record count {_totalRecordCount}");
+            LogProvider.Information($"{_logTag}.Execute", $"Total Execution Time: {watch.Elapsed.ToString(@"hh\:mm\:ss")}");
         }
         private string ValidateDecompressSource(string sourceFilePath)
         {
@@ -93,11 +94,11 @@ namespace ca.awsLargeJsonTransform.Services
 
                         if (line.Contains(FileParseKeyTerms.dataByDepartmentAndSearchTerm, StringComparison.OrdinalIgnoreCase))
                         {
-                            LogProvider.Trace($"{_logTag}.ParseLargeJsonFile", "header parsing started.");
+                            LogProvider.Information($"{_logTag}.ParseLargeJsonFile", "header parsing started.");
                             Tuple<SearchTerms, string> headerOutput = ParseHeader(line);
                             searchTerms = headerOutput.Item1;
                             jsonDocument += headerOutput.Item2;
-                            LogProvider.Trace(logTag, "header parsing completed successfully.");
+                            LogProvider.Information(logTag, "header parsing completed successfully.");
                         }
                         else
                         {
@@ -222,8 +223,10 @@ namespace ca.awsLargeJsonTransform.Services
                     }
                 });
                 string outputFilePath = ConfigProvider.Instance.GetDestinationCsvFilePath(nextFileNumber);
-                LogProvider.Information(logTag, $"Writing to csv file '{new FileInfo(outputFilePath).Name}' with total record count {searchTerms.dataByDepartmentAndSearchTerm.Count}");
+                LogProvider.Information(logTag, $"Writing to csv file '{new FileInfo(outputFilePath).Name}' with {searchTerms.dataByDepartmentAndSearchTerm.Count} records");
                 File.WriteAllText(outputFilePath, sbCsvContent.ToString());
+                _totalRecordCount += searchTerms.dataByDepartmentAndSearchTerm.Count;
+                LogProvider.Information(logTag, $"{_totalRecordCount} successfully transformed");
                 nextFileNumber++;
                 searchTerms.dataByDepartmentAndSearchTerm.Clear();
 

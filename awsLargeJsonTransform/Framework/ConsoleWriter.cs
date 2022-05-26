@@ -41,7 +41,6 @@
         }
         public static void Write(LogLevel type, string message)
         {
-            if (!DoLog(type)) { return; }
             Console.BackgroundColor = ConsoleColor.Black;
             Console.ForegroundColor = ConsoleColor.White;
             switch (type)
