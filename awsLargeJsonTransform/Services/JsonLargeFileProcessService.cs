@@ -110,7 +110,7 @@ namespace ca.awsLargeJsonTransform.Services
                                 jsonDocument = ParseBody(jsonDocument + line, searchTerms);
                                 nextFileNumber = ExportToCsv(searchTerms, maxJsonRowCountPerFile, nextFileNumber);
 
-                                if(count > 0 && (jsonDocument.Contains("]") || jsonDocument.Contains("[")))
+                                if(count > 0 && jsonDocument.Contains("}]"))
                                 {
                                     LogProvider.Error(logTag, new Exception("jsonDocument has [ and ]"));
                                     string errorFilePath = GetErroredFilePath(errorFileNumber);
@@ -149,9 +149,9 @@ namespace ca.awsLargeJsonTransform.Services
                 string finalJsonDocument = jsonDocument.Substring(startIndex);
                 leftOverContent = jsonDocument.Substring(0, startIndex);
                 string strEnd = "}";
-                if (finalJsonDocument.Contains("]"))
+                if (finalJsonDocument.Contains("}]"))
                 {
-                    strEnd = "]";
+                    strEnd = "}]";
                 }
                 int endIndex = finalJsonDocument.LastIndexOf(strEnd) + 1;
                 finalJsonDocument = $"[{finalJsonDocument.Substring(0, endIndex)}".Trim();
