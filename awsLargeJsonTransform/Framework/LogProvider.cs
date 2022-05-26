@@ -179,10 +179,10 @@ namespace ca.awsLargeJsonTransform.Framework
         public static void Write(LogLevel type, string tag, string detail, Exception ex)
         {
             if (!DoLog(type)) { return; }
-            CheckSession();
             ConsoleWriter.Write(type, tag, detail, ex);
-            SetLogFilePath();
-            Directory.CreateDirectory(new FileInfo(_logFilePath).Directory.FullName);
+            if (!ConfigProvider.Instance.GetDoLogToFile()) { return; }
+            CheckSession();
+            SetLogFilePath(type);
             StringBuilder sb = new StringBuilder();
             if (!File.Exists(_logFilePath))
             {
@@ -198,28 +198,47 @@ namespace ca.awsLargeJsonTransform.Framework
             _logRowCount++;
             sb = null;
         }
-
-        private static void SetLogFilePath()
+        private static void SetLogFilePath(LogLevel type)
         {
+            switch (type)
+            {
+                case LogLevel.Trace:
+                case LogLevel.Debug:
+                    SetTraceLogFilePath();
+                    break;
+                default:
+                    SetLogFilePath();
+                    break;
+            }
+            Directory.CreateDirectory(new FileInfo(_logFilePath).Directory.FullName);
+        }
+        private static void SetTraceLogFilePath()
+        {
+            string prefix= $"{DateTime.Now.ToString("yyyyMMdd")}-{_sessionId}";
             if (string.IsNullOrWhiteSpace(_logFilePath))
             {
-                _logFilePath = $@"{GetLogPath()}\{GetLogSessionPrefix()}\log-{DateTime.Now.ToString("HHmmss")}.log";
+                _logFilePath = $@"{GetLogPath()}\{prefix}\log-{DateTime.Now.ToString("HHmmss")}.log";
                 return;
             }
             if (_logRowCount > _maxLogRowCount)
             {
-                _logFilePath = $@"{GetLogPath()}\{GetLogSessionPrefix()}\log-{DateTime.Now.ToString("HHmmss")}.log";
+                _logFilePath = $@"{GetLogPath()}\{prefix}\log-{DateTime.Now.ToString("HHmmss")}.log";
+            }
+        }
+        private static void SetLogFilePath()
+        {
+            string prefix = $"log-{_sessionId}-{DateTime.Now.ToString("yyyyMMdd")}";
+            if (string.IsNullOrWhiteSpace(_logFilePath))
+            {
+                _logFilePath = $@"{GetLogPath()}\{prefix}-{DateTime.Now.ToString("HHmmss")}.log";
+                return;
+            }
+            if (_logRowCount > _maxLogRowCount)
+            {
+                _logFilePath = $@"{GetLogPath()}\{prefix}-{DateTime.Now.ToString("HHmmss")}.log";
             }
         }
 
-        ///<summary>
-        /// Get log session prefix
-        /// </summary>
-        /// <returns>returns log session prefix</returns>
-        private static string GetLogSessionPrefix()
-        {
-            return $"{DateTime.Now.ToString("yyyyMMdd")}-{_sessionId}";
-        }
 
         ///<summary>
         /// Get log file path

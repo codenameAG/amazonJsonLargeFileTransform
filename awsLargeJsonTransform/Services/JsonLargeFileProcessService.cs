@@ -26,6 +26,7 @@ namespace ca.awsLargeJsonTransform.Services
     {
         private string _logTag = "JsonLFPService";
         private long _totalRecordCount = 0;
+        private int errorFileNumber = 0;
         public JsonLargeFileProcessService()
         {
 
@@ -108,6 +109,14 @@ namespace ca.awsLargeJsonTransform.Services
                                 LogProvider.TraceDetailMode(logTag, $"body parsing at bufferRowCount = {bufferRowCount}");
                                 jsonDocument = ParseBody(jsonDocument + line, searchTerms);
                                 nextFileNumber = ExportToCsv(searchTerms, maxJsonRowCountPerFile, nextFileNumber);
+
+                                if(count > 0 && (jsonDocument.Contains("]") || jsonDocument.Contains("[")))
+                                {
+                                    LogProvider.Error(logTag, new Exception("jsonDocument has [ and ]"));
+                                    string errorFilePath = GetErroredFilePath(errorFileNumber);
+                                    WriteToFile(errorFilePath, jsonDocument);
+                                }
+
                             }
                             catch (Exception ex)
                             {
@@ -116,18 +125,64 @@ namespace ca.awsLargeJsonTransform.Services
                         }
                     }
                 }
-                nextFileNumber = ExportToCsv(searchTerms, nextFileNumber);
-                if (!string.IsNullOrWhiteSpace(jsonDocument))
-                {
-                    string outputFilePath = ConfigProvider.Instance.GetDestinationCsvFilePath(nextFileNumber++) + ".leftover.txt";
-                    LogProvider.Information(logTag, $"Writing to csv file '{new FileInfo(outputFilePath).Name}' with total record count {searchTerms.dataByDepartmentAndSearchTerm.Count}");
-                    File.WriteAllText(outputFilePath, jsonDocument);
-                }
+                ParsingEndOfFileErroredContent(jsonDocument, searchTerms, nextFileNumber++);
             }
             catch (Exception ex)
             {
                 LogProvider.Error($"{logTag}.Error source file {sourceFilePath}", ex);
             }
+        }
+
+        private void ParsingEndOfFileErroredContent(string jsonDocument, SearchTerms searchTerms, int nextFileNumber)
+        {
+            string logTag = $"{_logTag}.ParsingEndOfFileErroredContent";
+            try
+            {
+                if (string.IsNullOrWhiteSpace(jsonDocument))
+                {
+                    LogProvider.Information(logTag, $"The file had no errored content all data parsed.");
+                    return;
+                }
+                if (searchTerms.dataByDepartmentAndSearchTerm == null) { searchTerms.dataByDepartmentAndSearchTerm = new List<Databydepartmentandsearchterm>(); }
+                string leftOverContent = "";
+                int startIndex = jsonDocument.IndexOf("{");
+                string finalJsonDocument = jsonDocument.Substring(startIndex);
+                leftOverContent = jsonDocument.Substring(0, startIndex);
+                string strEnd = "}";
+                if (finalJsonDocument.Contains("]"))
+                {
+                    strEnd = "]";
+                }
+                int endIndex = finalJsonDocument.LastIndexOf(strEnd) + 1;
+                finalJsonDocument = $"[{finalJsonDocument.Substring(0, endIndex)}".Trim();
+                if (!finalJsonDocument.EndsWith("]"))
+                {
+                    finalJsonDocument += "]";
+                }
+
+                leftOverContent += jsonDocument.Substring(endIndex);
+                searchTerms.dataByDepartmentAndSearchTerm.AddRange(finalJsonDocument.FromJson<List<Databydepartmentandsearchterm>>());
+                ExportToCsv(searchTerms, nextFileNumber);
+                string outputFilePath = GetErroredFilePath(errorFileNumber);
+                WriteToFile(outputFilePath, leftOverContent);
+            }
+            catch(Exception ex)
+            {
+                LogProvider.Error(logTag, ex);
+                string outputFilePath = GetErroredFilePath(errorFileNumber);
+                WriteToFile(outputFilePath, jsonDocument);
+            }
+        }
+        private string GetErroredFilePath(int errorFileNumber)
+        {
+            return ConfigProvider.Instance.GetDestinationCsvFilePath(errorFileNumber++) + ".errcnt";
+        }
+        private void WriteToFile(string outputFilePath, string content)
+        {
+            if (string.IsNullOrWhiteSpace(content)) { return; }
+            string logTag = $"{_logTag}.WriteOverlookedContent";
+            LogProvider.Information(logTag, $"Writing to incorrect leftover content completed to file {new FileInfo(outputFilePath).Name}.");
+            File.WriteAllText(outputFilePath, content);
         }
 
         private Tuple<SearchTerms, string> ParseHeader(string line)
@@ -157,7 +212,7 @@ namespace ca.awsLargeJsonTransform.Services
             return Tuple.Create<SearchTerms, string>(searchTerms, body);
         }
 
-        private string ParseBody(string jsonBody, SearchTerms searchTerms)
+        private string ParseBody(string jsonBody, SearchTerms searchTerms, bool checkForArrayEnd = false)
         {
             string logTag = $"{_logTag}.ParseBody";
             try
@@ -165,7 +220,13 @@ namespace ca.awsLargeJsonTransform.Services
                 if (string.IsNullOrWhiteSpace(jsonBody) || !jsonBody.Contains("}")) { return jsonBody; }
                 if (searchTerms.dataByDepartmentAndSearchTerm == null) { searchTerms.dataByDepartmentAndSearchTerm = new List<Databydepartmentandsearchterm>(); }
                 int lastIndexOfRow = jsonBody.LastIndexOf("}") + 1;
-                string arrayBody = jsonBody.Substring(0, lastIndexOfRow).Trim() + "]";
+                string strEnd = "]";
+                if (checkForArrayEnd && jsonBody.Contains("]"))
+                {
+                    lastIndexOfRow = jsonBody.IndexOf("]") + 1;
+                    strEnd = string.Empty;
+                }
+                string arrayBody = jsonBody.Substring(0, lastIndexOfRow).Trim() + strEnd;
                 searchTerms.dataByDepartmentAndSearchTerm.AddRange(arrayBody.FromJson<List<Databydepartmentandsearchterm>>());
                 string leftoverBody = jsonBody.Substring(lastIndexOfRow).Trim();
                 if (leftoverBody.StartsWith(","))
@@ -181,7 +242,8 @@ namespace ca.awsLargeJsonTransform.Services
             }
             catch (Exception ex)
             {
-                LogProvider.Error($"{logTag} this error can be ignored as it will get fix in next iteration", ex);
+                //LogProvider.Error($"{logTag} this error can be ignored as it will get fix in next iteration", ex);
+                ConsoleWriter.Write(LogLevel.Error, $"{logTag} this error can be ignored as it will get fix in next iteration. Error: {ex.Message}");
                 return jsonBody;
             }
         }

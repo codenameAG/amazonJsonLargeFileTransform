@@ -79,6 +79,10 @@ namespace ca.awsLargeJsonTransform.Framework
         {
             return bool.Parse(GetLogSettings("errorDetailMode", "true"));
         }
+        public bool GetDoLogToFile()
+        {
+            return bool.Parse(GetLogSettings("doLogToFile", "true"));
+        }
         public string GetConsoleLogType()
         {
 #pragma warning disable CS8603 // Possible null reference return.
