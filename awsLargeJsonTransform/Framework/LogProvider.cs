@@ -15,7 +15,7 @@ namespace ca.awsLargeJsonTransform.Framework
         /// <summary>
         /// Static constructor
         /// </summary>
-        static LogProvider() {  _logRowCount = 0; _maxLogRowCount = ConfigProvider.Instance.GetMaxLogRowCount(); }
+        static LogProvider() { _logRowCount = 0; _maxLogRowCount = ConfigProvider.Instance.GetMaxLogRowCount(); }
 
         ///<summary>
         /// Initialize the session & set session id
@@ -62,7 +62,7 @@ namespace ca.awsLargeJsonTransform.Framework
         /// <param name="tag">tag of detail to log</param>
         /// <param name="message">message to log</param>
         /// <param name="writeToConsole">Flag indicates whether to write log on console screen or not</param>
-        
+
         ///<summary>
         /// Write error logs to log file
         /// </summary>
@@ -148,6 +148,25 @@ namespace ca.awsLargeJsonTransform.Framework
         {
             Write(type, tag, null, ex);
         }
+        private static bool DoLog(LogLevel type)
+        {
+            if (type != LogLevel.Trace && type != LogLevel.Debug)
+            {
+                return true;
+            }
+            else if (type == LogLevel.Trace
+                && ConfigProvider.Instance.GetConsoleLogType().Equals("trace", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            else if (type == LogLevel.Debug
+                && (ConfigProvider.Instance.GetConsoleLogType().Equals("trace", StringComparison.OrdinalIgnoreCase)
+                || ConfigProvider.Instance.GetConsoleLogType().Equals("debug", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+            return false;
+        }
 
         ///<summary>
         /// Write logs to log file
@@ -159,8 +178,9 @@ namespace ca.awsLargeJsonTransform.Framework
         /// <param name="writeToConsole">Flag indicates whether to write log on console screen or not</param>
         public static void Write(LogLevel type, string tag, string detail, Exception ex)
         {
+            if (!DoLog(type)) { return; }
             CheckSession();
-            ConsoleWriter.Write(type, tag, detail, ex);            
+            ConsoleWriter.Write(type, tag, detail, ex);
             SetLogFilePath();
             Directory.CreateDirectory(new FileInfo(_logFilePath).Directory.FullName);
             StringBuilder sb = new StringBuilder();
@@ -185,11 +205,11 @@ namespace ca.awsLargeJsonTransform.Framework
             {
                 _logFilePath = $@"{GetLogPath()}\{GetLogSessionPrefix()}\log-{DateTime.Now.ToString("HHmmss")}.log";
                 return;
-            }            
-            if(_logRowCount > _maxLogRowCount)
+            }
+            if (_logRowCount > _maxLogRowCount)
             {
                 _logFilePath = $@"{GetLogPath()}\{GetLogSessionPrefix()}\log-{DateTime.Now.ToString("HHmmss")}.log";
-            }            
+            }
         }
 
         ///<summary>
